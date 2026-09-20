@@ -1,0 +1,13 @@
+[Unit]
+Description=Macvlan interfaces for virtual ONVIF cameras
+Wants=network-online.target
+After=network-online.target
+Before=onvif-protect.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/local/sbin/onvif-network
+
+[Install]
+WantedBy=multi-user.target

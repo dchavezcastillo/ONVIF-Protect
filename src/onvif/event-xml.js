@@ -1,0 +1,16 @@
+"use strict";
+const { randomUUID } = require("crypto");
+const { escapeXml: esc } = require("../transport/xml");
+const NS = "http://www.onvif.org/ver10/events/wsdl";
+const TOPIC = "tns1:RuleEngine/CellMotionDetector/Motion";
+const DIALECT = "http://www.onvif.org/ver10/tev/topicExpression/ConcreteSet";
+function notification(base, e) {
+  return `<wsnt:NotificationMessage><wsnt:Topic Dialect="${DIALECT}">${TOPIC}</wsnt:Topic><wsnt:ProducerReference><wsa:Address>${esc(base)}</wsa:Address></wsnt:ProducerReference><wsnt:Message><tt:Message UtcTime="${e.time}" PropertyOperation="${e.initialized ? "Initialized" : "Changed"}"><tt:Source><tt:SimpleItem Name="VideoSourceConfigurationToken" Value="video_src_config_token"/><tt:SimpleItem Name="VideoAnalyticsConfigurationToken" Value="analytics_config_token"/><tt:SimpleItem Name="Rule" Value="Motion"/></tt:Source><tt:Data><tt:SimpleItem Name="IsMotion" Value="${e.active}"/></tt:Data></tt:Message></wsnt:Message></wsnt:NotificationMessage>`;
+}
+function envelope(body, action, messageId) {
+  return `<s:Envelope xmlns:s="http://www.w3.org/2003/05/soap-envelope" xmlns:wsa="http://www.w3.org/2005/08/addressing" xmlns:tev="${NS}" xmlns:wsnt="http://docs.oasis-open.org/wsn/b-2" xmlns:wstop="http://docs.oasis-open.org/wsn/t-1" xmlns:tt="http://www.onvif.org/ver10/schema" xmlns:tns1="http://www.onvif.org/ver10/topics" xmlns:xs="http://www.w3.org/2001/XMLSchema"><s:Header><wsa:MessageID>urn:uuid:${randomUUID()}</wsa:MessageID>${messageId ? `<wsa:RelatesTo>${esc(messageId)}</wsa:RelatesTo>` : ""}<wsa:Action>${esc(action || "http://www.w3.org/2005/08/addressing/fault")}</wsa:Action></s:Header><s:Body>${body}</s:Body></s:Envelope>`;
+}
+const capabilities =
+  '<tev:GetServiceCapabilitiesResponse><tev:Capabilities WSSubscriptionPolicySupport="false" WSPullPointSupport="true" WSPausableSubscriptionManagerInterfaceSupport="false" MaxPullPoints="32" PersistentNotificationStorage="false"/></tev:GetServiceCapabilitiesResponse>';
+const properties = `<tev:GetEventPropertiesResponse><tev:TopicNamespaceLocation>http://www.onvif.org/onvif/ver10/topics/topicns.xml</tev:TopicNamespaceLocation><tev:FixedTopicSet>true</tev:FixedTopicSet><wstop:TopicSet><tns1:RuleEngine><CellMotionDetector><Motion wstop:topic="true"><tt:MessageDescription IsProperty="true"><tt:Source><tt:SimpleItemDescription Name="VideoSourceConfigurationToken" Type="tt:ReferenceToken"/><tt:SimpleItemDescription Name="VideoAnalyticsConfigurationToken" Type="tt:ReferenceToken"/><tt:SimpleItemDescription Name="Rule" Type="xs:string"/></tt:Source><tt:Data><tt:SimpleItemDescription Name="IsMotion" Type="xs:boolean"/></tt:Data></tt:MessageDescription></Motion></CellMotionDetector></tns1:RuleEngine></wstop:TopicSet><wsnt:TopicExpressionDialect>http://docs.oasis-open.org/wsn/t-1/TopicExpression/Concrete</wsnt:TopicExpressionDialect><wsnt:TopicExpressionDialect>${DIALECT}</wsnt:TopicExpressionDialect><tev:MessageContentFilterDialect>http://www.onvif.org/ver10/tev/messageContentFilter/ItemFilter</tev:MessageContentFilterDialect><tev:MessageContentSchemaLocation>http://www.onvif.org/ver10/schema/onvif.xsd</tev:MessageContentSchemaLocation></tev:GetEventPropertiesResponse>`;
+module.exports = { notification, envelope, capabilities, properties, NS };

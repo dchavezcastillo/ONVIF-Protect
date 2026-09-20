@@ -1,0 +1,17 @@
+services:
+  onvif-protect:
+    build: .
+    restart: unless-stopped
+    init: true
+    network_mode: host
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    env_file: ${ONVIF_ENV_FILE:-.env}
+    volumes:
+      - ./config.yaml:/app/config.yaml:ro
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "3"

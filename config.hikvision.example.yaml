@@ -1,0 +1,69 @@
+# Copy to config.yaml. IP, MAC, resolution, and FPS must match your installation.
+eventSources:
+  - id: hikvision-dvr
+    type: hikvision-isapi
+    url: http://192.168.1.200/ISAPI/Event/notification/alertStream
+    usernameEnv: HIKVISION_USER
+    passwordEnv: HIKVISION_PASSWORD
+    idleTimeoutMs: 90000
+
+onvif:
+  - name: Entrance
+    mac: a2:a2:a2:a2:a2:a1
+    uuid: 15b21259-77d9-441f-9913-3ccd8a82e430
+    # Optional: local macvlan interface IP. If omitted, it is resolved by MAC.
+    # hostname: 192.168.1.201
+    ports: { server: 8081, rtsp: 8554, snapshot: 8580 }
+    highQuality:
+      rtsp: /Streaming/Channels/101
+      snapshot: /ISAPI/Streaming/channels/101/picture
+      width: 1920
+      height: 1080
+      framerate: 15
+      bitrate: 2048
+      quality: 4
+    lowQuality:
+      rtsp: /Streaming/Channels/102
+      snapshot: /ISAPI/Streaming/channels/102/picture
+      width: 640
+      height: 360
+      framerate: 15
+      bitrate: 512
+      quality: 1
+    target:
+      hostname: 192.168.1.200
+      ports: { rtsp: 554, snapshot: 80 }
+    motion:
+      source: hikvision-dvr
+      channel: 1
+      channelField: channelID
+      eventTypes: [VMD]
+      resetAfterMs: 30000
+
+  - name: Yard
+    mac: a2:a2:a2:a2:a2:a2
+    uuid: 15b21259-77d9-441f-9913-3ccd8a82e431
+    ports: { server: 8082, rtsp: 8554, snapshot: 8580 }
+    highQuality:
+      rtsp: /Streaming/Channels/201
+      snapshot: /ISAPI/Streaming/channels/201/picture
+      width: 1920
+      height: 1080
+      framerate: 15
+      bitrate: 2048
+      quality: 4
+    lowQuality:
+      rtsp: /Streaming/Channels/202
+      snapshot: /ISAPI/Streaming/channels/202/picture
+      width: 640
+      height: 360
+      framerate: 15
+      bitrate: 512
+      quality: 1
+    target:
+      hostname: 192.168.1.200
+      ports: { rtsp: 554, snapshot: 80 }
+    motion:
+      source: hikvision-dvr
+      channel: 2
+      resetAfterMs: 30000

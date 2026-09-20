@@ -1,0 +1,22 @@
+{
+  "name": "onvif-protect",
+  "version": "2.0.0",
+  "description": "Virtual ONVIF cameras for RTSP DVRs, NVRs and cameras with optional motion adapters",
+  "main": "main.js",
+  "license": "PolyForm-Noncommercial-1.0.0",
+  "dependencies": {
+    "soap": "1.12.0",
+    "xml2js": "0.6.2",
+    "argparse": "2.0.1",
+    "yaml": "2.8.3",
+    "simple-node-logger-se": "^21.8.19"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "start": "node main.js",
+    "test": "node --test",
+    "check": "node main.js --check-config config.example.yaml"
+  }
+}

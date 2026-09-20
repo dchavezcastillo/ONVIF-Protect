@@ -1,0 +1,23 @@
+[Unit]
+Description=Virtual ONVIF cameras for RTSP sources
+Wants=network-online.target
+After=network-online.target onvif-network.service
+Requires=onvif-network.service
+
+[Service]
+Type=simple
+User=onvif
+Group=onvif
+WorkingDirectory=/opt/onvif-protect
+EnvironmentFile=/etc/onvif-protect.env
+ExecStart=/usr/bin/node /opt/onvif-protect/main.js /etc/onvif-protect.yaml
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=15
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+
+[Install]
+WantedBy=multi-user.target
