@@ -2,15 +2,16 @@
 
 This guide installs the bridge directly on Raspberry Pi OS Lite with systemd. It starts with one virtual camera, verifies video, then adds motion events and checks delivery to UniFi Protect. No desktop or Docker is required.
 
-**Run every command on the Raspberry Pi**, in its terminal or an SSH session. Follow sections 1–11 for a new installation. If the bridge already works and you want to add cameras, go directly to [section 14](#14-add-or-edit-cameras-directly-on-the-pi).
+**Run the commands in this guide on the Raspberry Pi**, in its terminal or an SSH session. Follow sections 1–11 for a new installation. If the bridge already works and you want to add cameras, go directly to [section 14](#14-add-or-edit-cameras-directly-on-the-pi).
 
 In nano, save with **Ctrl+O**, press **Enter**, and exit with **Ctrl+X**. Copy only the text inside command blocks, without Markdown link brackets. Replace example addresses and placeholder values before running commands.
 
 | File | What you edit |
 | --- | --- |
-| `/etc/onvif-protect.yaml` | Cameras, stream paths, and motion settings |
-| `/etc/onvif-protect.env` | Event account credentials |
+| `/etc/onvif-protect.yaml` | Cameras, stream paths, snapshots, and motion settings |
+| `/etc/onvif-protect.env` | Event and snapshot account credentials |
 | `/usr/local/sbin/onvif-network` | Virtual interfaces, MACs, and IPs |
+| `/etc/sysctl.d/90-onvif-network.conf` | Optional ARP settings, only after the network test |
 
 Video works with compatible RTSP/TCP sources. Motion requires a separate compatible event interface: the included adapter reads an HTTP(S) XML stream using Digest authentication. RTSP support alone does not imply event compatibility. The bridge neither analyzes images nor transcodes video.
 
@@ -173,6 +174,10 @@ sudo journalctl -u onvif-network.service -n 50 --no-pager
 For future changes, edit `/usr/local/sbin/onvif-network` directly with `sudo nano`. The script does not remove old interfaces or addresses. IP/MAC changes require deliberate cleanup of the previous interface.
 
 If a firewall or VLAN separates the devices, allow Protect to reach UDP 3702 for discovery, TCP 8081 for ONVIF, and TCP 8554 for video. The Pi also needs access to the source's RTSP and event ports. Use a trusted network: the virtual ONVIF and health endpoints do not authenticate clients.
+
+If some cameras are missing or their IP associations change in Protect, use [network troubleshooting](network-troubleshooting.md). It includes checks for every configured IP, ARP inspection from the correct subnet, optional persistent ARP settings, and reboot verification. Keep the existing camera identities. A successful local HTTP check alone does not verify what Protect sees on the network.
+
+When adding snapshots, also allow TCP 8580 to the virtual IP and HTTP access from the Pi to the source snapshot port (80 in the examples). The legacy image URL uses the existing ONVIF port 8081.
 
 ## 5. Validate and test manually
 
@@ -419,6 +424,8 @@ If subscriptions exist but no timeline event appears, inspect event requests/err
 
 ## 13. Capture debug logs
 
+For playable events with missing thumbnails, see [Restore thumbnails without removing adopted cameras](snapshot-compatibility.md). It covers the legacy snapshot URL, source credentials, and validation of a new event.
+
 A manual debug process temporarily replaces the service and interrupts video during the switch. Never run both simultaneously:
 
 ```sh
@@ -560,3 +567,37 @@ watch -n 1 'curl --show-error --max-time 2 http://192.168.1.202:8081/healthz'
 Trigger movement and check `source.connected: true`, `motion: true`, an active subscription, and an event on that camera's Protect timeline. Also check that movement on one channel does not trigger another virtual camera. If `motion: true` appears but subscriptions remain zero, follow [section 12](#12-if-motion-reaches-the-bridge-but-not-protect).
 
 If Protect lists the same virtual IP twice, compare identities, active processes, and the MAC displayed for each entry before changing anything. A source recorder listed at its own IP is a separate discovery entry. Preserve the working camera's identity.
+
+## 15. Configure snapshots and verify thumbnails
+
+Use [the complete snapshot procedure](snapshot-compatibility.md) after video works. It covers both new installations and existing cameras whose cached image URL is `/snapshot.png`.
+
+1. Install the corrected project code on the Pi; editing YAML alone cannot add the new handler.
+2. Verify the source image with curl using the correct account and channel path.
+3. Edit `/etc/onvif-protect.yaml` with nano: add `ports.snapshot`, `target.ports.snapshot`, `highQuality.snapshot`, and camera-level `snapshotAuth`. Preserve the existing UUID, MAC, IP, video, and motion settings.
+4. Add the referenced credentials to `/etc/onvif-protect.env`, validate, and restart the bridge as shown in the snapshot procedure.
+5. Download `http://VIRTUAL_IP:8081/snapshot.png` without client credentials and confirm a current image of the correct camera. Repeat for each camera.
+6. Trigger a new motion episode, let it finish, and verify the thumbnail in Protect. Existing events without saved thumbnails may not regenerate.
+
+Do not remove or re-adopt existing cameras for this correction. The direct snapshot proxy on port 8580 and the compatibility route on port 8081 use different authentication paths; test the exact URL Protect has stored.
+
+## 16. Service commands
+
+Run only the command needed for the action:
+
+```sh
+# Stop video/event forwarding.
+sudo systemctl stop onvif-protect.service
+
+# Start it again.
+sudo systemctl start onvif-protect.service
+
+# Reload camera settings and credentials by restarting.
+sudo systemctl restart onvif-protect.service
+
+# Inspect status and recent logs.
+sudo systemctl status onvif-protect.service --no-pager
+sudo journalctl -u onvif-protect.service -n 60 --no-pager
+```
+
+Restart networking only after changing the network script, following section 14. The network service is a oneshot unit: stopping it does not delete virtual interfaces. No `daemon-reload` is required for YAML, environment-file, or network-script edits; it is required after editing a systemd unit.

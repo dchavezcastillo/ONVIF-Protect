@@ -28,6 +28,10 @@ function attachService(server, services, name) {
 }
 function routeRequest(camera, request, response) {
   const pathname = new URL(request.url, "http://localhost").pathname;
+  if (pathname === "/snapshot.png" && camera.snapshot.path) {
+    camera.snapshot.handle(request, response);
+    return;
+  }
   if (
     camera.events &&
     (pathname === "/onvif/events_service" ||

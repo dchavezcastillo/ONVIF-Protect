@@ -5,6 +5,7 @@ const { Events } = require("./events");
 const { createMediaService } = require("./onvif/media");
 const { createDeviceService } = require("./onvif/device");
 const { Discovery } = require("./onvif/discovery");
+const { Snapshot } = require("./snapshot");
 const { attachService, routeRequest, asset } = require("./onvif/http");
 const { listen, closeServer } = require("./transport/server");
 
@@ -25,6 +26,7 @@ class OnvifServer {
     this.logger = logger;
     config.hostname ||= addressForMac(config.mac);
     this.events = config.motion ? new Events(this.eventAddress()) : null;
+    this.snapshot = new Snapshot(config, logger);
     const media = createMediaService(config);
     this.profiles = media.profiles;
     this.videoSource = media.videoSource;
@@ -88,6 +90,7 @@ class OnvifServer {
     if (!this.closing) {
       this.closed = true;
       this.events?.close();
+      this.snapshot.close();
       this.closing = Promise.all([
         this.discovery.close(),
         closeServer(this.server),
