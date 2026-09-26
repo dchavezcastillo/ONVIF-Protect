@@ -4,6 +4,8 @@ Use compatible RTSP/TCP streams from DVRs, NVRs, or cameras of any brand as virt
 
 Designed for Raspberry Pi with Ethernet, 64-bit Raspberry Pi OS, and Node.js 22 or later. Docker configuration is also included for Linux ARM64/AMD64. This bridge does not transcode or analyze video: motion detection happens on the source device.
 
+**Installing on Raspberry Pi OS Lite?** Follow the [complete installation and motion setup guide](docs/raspberry-pi-setup.md). It covers Node.js installation, one virtual camera, persistent networking, systemd, source-side motion settings, event credentials, Protect adoption, troubleshooting, and reboot verification. Camera examples are manufacturer-independent; motion still requires the supported XML/Digest event protocol.
+
 ```text
 DVR / NVR / camera ── RTSP / snapshot ── TCP proxies ── virtual cameras ── Protect
 Optional events ── compatible event stream (one connection per source/DVR)
@@ -20,24 +22,25 @@ Start with [config.example.yaml](config.example.yaml) for generic RTSP. Add opti
 
 ## First installation on Raspberry Pi
 
+For copyable commands and a complete single-camera configuration, use the [step-by-step Raspberry Pi OS Lite guide](docs/raspberry-pi-setup.md). Run all commands on the Pi, locally or over SSH. The steps below are a shorter reference. For an existing installation, jump to [Add or edit cameras](#add-or-edit-cameras-directly-on-the-pi). In nano, save with **Ctrl+O**, **Enter**, then exit with **Ctrl+X**.
+
 1. Copy this project to your Raspberry Pi, for example to `/opt/onvif-protect`. Install Node.js 22 or later and check `node --version`. The supplied systemd unit expects `/usr/bin/node`; adjust `ExecStart` if your executable is elsewhere.
 2. Inside the project directory:
 
    ```sh
    npm ci --omit=dev --ignore-scripts
-   cp config.example.yaml config.yaml
    ```
 
-3. Edit `config.yaml` with your DVR/NVR/camera address, actual RTSP path, resolution, frame rate, and a unique UUID and MAC for each virtual camera. The default example **does not require ONVIF on the source or event credentials**. For optional motion forwarding, configure an event source as described below and create a `.env` file with the environment variables referenced by that source.
+3. Open `/etc/onvif-protect.yaml` using `sudo nano /etc/onvif-protect.yaml`. Paste the [complete single-camera example](docs/raspberry-pi-setup.md#3-configure-one-video-stream), then set your source address, real RTSP path, video parameters, and a unique UUID and MAC. For a new installation, run `sudo chown root:root /etc/onvif-protect.yaml` and `sudo chmod 600 /etc/onvif-protect.yaml` after saving. The default example **does not require ONVIF on the source or event credentials**. For optional motion forwarding, configure an event source as described below and create `/etc/onvif-protect.env` with the environment variables referenced by that source. Keep it owned by root with mode `0600`.
 4. Create the virtual interfaces described below. Each camera needs **its own local IP and MAC address**, plus a stable UUID. Writing a MAC address in YAML does not create an interface.
 5. Validate and start:
 
    ```sh
-   node main.js --check-config config.yaml
-   node main.js config.yaml
+   sudo /usr/bin/node main.js --check-config /etc/onvif-protect.yaml
+   sudo /usr/bin/node main.js /etc/onvif-protect.yaml
    ```
 
-When loading event credentials from `.env`, add `--env-file=.env` after `node` in both commands. `usernameEnv` and `passwordEnv` reference environment variables; inline `username` and `password` fields are also supported in YAML.
+When loading event credentials from `/etc/onvif-protect.env`, add `--env-file=/etc/onvif-protect.env` after `/usr/bin/node` in both commands. `usernameEnv` and `passwordEnv` reference environment variables; inline `username` and `password` fields are also supported in YAML.
 
 `--check-config` validates configuration structure and available credentials. It does not connect to the DVR, check local interfaces, or certify Protect compatibility. Startup checks address availability and listener conflicts before opening services.
 
@@ -45,12 +48,25 @@ When loading event credentials from `.env`, add `--env-file=.env` after `node` i
 
 Use Ethernet (`eth0` in the example). Macvlan generally does not work over a Wi-Fi client connection. Reserve unused addresses outside the DHCP pool or exclude them from it: **192.168.1.201 and .202 are examples**, not addresses you can assume are available. The DVR, Raspberry Pi, and virtual cameras need different IP addresses.
 
-Edit `scripts/network.example.sh` with your physical interface, subnet, IP addresses, and MAC addresses. Its entries must match `config.yaml`. Keep one entry per virtual camera. The script assigns static addresses; it does not request DHCP leases.
-
-After reviewing the addresses:
+Create the active network script directly:
 
 ```sh
-sudo install -m 0755 scripts/network.example.sh /usr/local/sbin/onvif-network
+sudo nano /usr/local/sbin/onvif-network
+```
+
+Paste the [complete network script](docs/raspberry-pi-setup.md#4-create-persistent-virtual-networking), then set your Ethernet interface, subnet, IP addresses, and MAC addresses. Keep one `add_camera` line per camera, matching `/etc/onvif-protect.yaml`. The script assigns static addresses; it does not request DHCP leases.
+
+Save, then validate its syntax:
+
+```sh
+sudo chmod 755 /usr/local/sbin/onvif-network
+sudo sh -n /usr/local/sbin/onvif-network
+```
+
+If the check prints an error, fix it first. Otherwise install and start the service:
+
+```sh
+cd /opt/onvif-protect
 sudo install -m 0644 scripts/onvif-network.service /etc/systemd/system/
 sudo systemctl daemon-reload
 sudo systemctl enable --now onvif-network.service
@@ -69,7 +85,7 @@ Configure motion detection, zones, sensitivity, and schedules on each source cha
 
 The event source must match the included adapter's protocol: a persistent HTTP(S) XML stream with Digest authentication and `EventNotificationAlert` documents containing `eventType`, `eventState`, and `channelID` or `dynChannelID`. A device exposing RTSP does not necessarily expose this event protocol.
 
-Add a source to `config.yaml`. Replace the URL placeholder with your device's compatible event endpoint:
+Add a source to `/etc/onvif-protect.yaml`. Replace the URL placeholder with your device's compatible event endpoint:
 
 ```yaml
 eventSources:
@@ -80,7 +96,7 @@ eventSources:
     idleTimeoutMs: 90000
 ```
 
-Create `.env` with `EVENT_USERNAME` and `EVENT_PASSWORD`, then start with `node --env-file=.env main.js config.yaml`. The source ID is a local name used to connect virtual cameras to their event source.
+Create `/etc/onvif-protect.env` with `EVENT_USERNAME` and `EVENT_PASSWORD` (root-owned, mode `0600`), then start with `sudo /usr/bin/node --env-file=/etc/onvif-protect.env main.js /etc/onvif-protect.yaml`. The source ID is a local name used to connect virtual cameras to their event source.
 
 Inspect the configured endpoint without writing the password into shell history:
 
@@ -120,16 +136,46 @@ Ubiquiti states that third-party motion detection must be configured on the came
 
 `/healthz` reports local status; HTTP 200 does not guarantee DVR connectivity or recording in Protect. Logs identify connections and retries by source. `--debug` adds ONVIF operations and motion transitions without logging passwords or authentication headers.
 
+### Verify motion and recover a missing Protect subscription
+
+On the source, enable motion detection, select its region and sensitivity, configure the arming schedule, and enable notification to monitoring clients (often called **Notify Surveillance Center**). Save the settings. Triggering recording on the source alone does not enable event forwarding.
+
+Verify a raw event before troubleshooting Protect: it must contain the expected channel, event type, and `active` state. A compatible stream may also send `videoloss` / `inactive` heartbeats with channel `0`; these are not motion events. Do not infer the event channel from the RTSP stream identifier.
+
+Observe the bridge while triggering movement:
+
+```sh
+watch -n 1 'curl --show-error --max-time 2 http://VIRTUAL_IP:8081/healthz'
+```
+
+| Health field | Interpretation |
+| --- | --- |
+| `motion: null` | Events are not enabled for this running camera. |
+| `source.connected: true` | Connected to the event source; not proof of movement. |
+| `source.lastEvent` | Updated by parsed events, including heartbeats and other channels. |
+| `motion: true` | The bridge recognized movement for this camera. |
+| `subscriptions: 0` | No active PullPoint subscriptions; Protect is not currently subscribed through this interface. |
+| `subscriptions > 0` | An ONVIF client is subscribed; confirm actual events in Protect's timeline. |
+
+If movement reaches the bridge but Protect has no subscription, especially after adding motion to an already adopted camera, verify the saved configuration and restart the Pi. Confirm `onvif-network.service` and `onvif-protect.service` are active after reboot. If needed, restart the Protect application through the console's application management, then check subscriptions and trigger a new motion episode. Restarting Protect temporarily interrupts viewing and recording for its cameras.
+
+Restarting the system and Protect restored motion delivery in a real deployment. This is an observed recovery step, not a guaranteed fix or proof of a specific caching issue. Preserve the camera UUID and MAC. Before removing/re-adopting a camera, collect the Protect version, `/healthz` response, and debug logs; removal can affect its association with existing recordings.
+
+See the [full motion verification, restart, and debug procedure](docs/raspberry-pi-setup.md#11-verify-motion-through-all-three-stages) for commands and expected results.
+
 **Physical validation is still required:** your device's event numbering, event endpoint access, and notification acceptance by your Protect installation. Automated tests use simulated devices and clients; they are not ONVIF certification or hardware validation.
 
 ## Automatic startup without Docker
 
-With the project in `/opt/onvif-protect`, create a dedicated user and install your configuration. For RTSP video without events, create an empty environment file using `touch .env`:
+With the project in `/opt/onvif-protect`, create a dedicated user and grant it read access to the existing `/etc/onvif-protect.yaml`. Create the environment file if it does not exist; it can remain empty for video without events:
 
 ```sh
 sudo useradd --system --user-group --home-dir /opt/onvif-protect --shell /usr/sbin/nologin onvif
-sudo install -o root -g onvif -m 0640 config.yaml /etc/onvif-protect.yaml
-sudo install -o root -g root -m 0600 .env /etc/onvif-protect.env
+sudo chown root:onvif /etc/onvif-protect.yaml
+sudo chmod 640 /etc/onvif-protect.yaml
+sudo touch /etc/onvif-protect.env
+sudo chown root:root /etc/onvif-protect.env
+sudo chmod 600 /etc/onvif-protect.env
 sudo install -m 0644 scripts/onvif-protect.service /etc/systemd/system/
 sudo systemctl daemon-reload
 sudo systemctl enable --now onvif-protect
@@ -137,6 +183,81 @@ journalctl -u onvif-protect -f
 ```
 
 Skip `useradd` if the account already exists. Project files and dependencies must be readable by `onvif`. The systemd environment file uses `NAME=value`, without `export`; quote values containing spaces according to `EnvironmentFile` syntax. Do not run the manual process and systemd service simultaneously.
+
+Manual runs and the service both read **`/etc/onvif-protect.yaml`**. No second configuration copy is needed. After adding event credentials to `/etc/onvif-protect.env`, validate with those credentials loaded before restarting:
+
+```sh
+sudo /usr/bin/node --env-file=/etc/onvif-protect.env \
+  /opt/onvif-protect/main.js --check-config /etc/onvif-protect.yaml
+```
+
+If validation succeeds:
+
+```sh
+sudo systemctl restart onvif-protect.service
+sudo journalctl -u onvif-protect.service -n 40 --no-pager
+```
+
+## Add or edit cameras directly on the Pi
+
+For an existing systemd installation, edit these files directly with nano:
+
+| File | Purpose |
+| --- | --- |
+| `/etc/onvif-protect.yaml` | Camera streams, identities, and motion settings |
+| `/usr/local/sbin/onvif-network` | One virtual IP and MAC per camera |
+| `/etc/onvif-protect.env` | Event credentials; keep the current values if using the same account |
+
+Follow this sequence. No upload, backup, or second configuration file is needed.
+
+1. Stop the bridge; video is temporarily interrupted:
+
+   ```sh
+   sudo systemctl stop onvif-protect.service
+   ```
+
+2. Edit the cameras and their matching network entries:
+
+   ```sh
+   sudo nano /etc/onvif-protect.yaml
+   sudo nano /usr/local/sbin/onvif-network
+   ```
+
+   Add new cameras under the existing `onvif:` list, with unique UUIDs and MACs. Keep existing identities unchanged. Add one matching `add_camera` line with an unused IP for each new camera. Use the [complete additional-camera example and editing instructions](docs/raspberry-pi-setup.md#14-add-or-edit-cameras-directly-on-the-pi). Use verified event channels and actual stream parameters.
+
+3. Validate the files:
+
+   ```sh
+   sudo chmod 755 /usr/local/sbin/onvif-network
+   sudo chown root:onvif /etc/onvif-protect.yaml
+   sudo chmod 640 /etc/onvif-protect.yaml
+   sudo sh -n /usr/local/sbin/onvif-network
+   sudo /usr/bin/node --env-file=/etc/onvif-protect.env \
+     /opt/onvif-protect/main.js --check-config /etc/onvif-protect.yaml
+   ```
+
+   The script check prints nothing on success. Configuration validation must report the expected camera count. **Fix any errors before continuing.**
+
+4. Apply networking and check all virtual IPs:
+
+   ```sh
+   sudo systemctl restart onvif-network.service
+   ip -br address
+   ```
+
+   If networking fails or interfaces are missing, check `sudo journalctl -u onvif-network.service -n 50 --no-pager` and correct it first. If only camera settings changed, the network restart can be skipped.
+
+5. Start the bridge and inspect its status:
+
+   ```sh
+   sudo systemctl start onvif-protect.service
+   sudo systemctl status onvif-protect.service --no-pager
+   sudo journalctl -u onvif-protect.service -n 60 --no-pager
+   ```
+
+6. Adopt each new virtual IP in Protect using ONVIF port `8081` and the source's video credentials. Enable motion notification on each source channel, then verify its `/healthz` response and Protect timeline. If the bridge shows movement but subscriptions stay at zero, follow [the restart and subscription checks](docs/raspberry-pi-setup.md#12-if-motion-reaches-the-bridge-but-not-protect).
+
+You do not need to edit the `.service` files or run `daemon-reload` for these configuration changes.
 
 ## Docker on Raspberry Pi or Linux
 
@@ -152,7 +273,7 @@ When migrating from systemd, stop `onvif-protect.service` first to release its p
 
 ## Compatibility and limitations
 
-- `node main.js config.yaml`, `--create-config`, `--version`, `--debug`, and their CLI aliases are supported. The generator retrieves ONVIF profiles and produces YAML; assign MAC addresses and add optional `eventSources`/`motion` after verifying channel IDs. Save generated UUIDs to keep device identities stable.
+- `sudo /usr/bin/node main.js /etc/onvif-protect.yaml`, `--create-config`, `--version`, `--debug`, and their CLI aliases are supported. The generator retrieves ONVIF profiles and produces YAML; assign MAC addresses and add optional `eventSources`/`motion` after verifying channel IDs. Save generated UUIDs to keep device identities stable.
 - The TCP proxy preserves the DVR's RTSP/snapshot authentication. Virtual ONVIF endpoints and `/healthz` do not authenticate clients. Use a trusted LAN/VLAN and do not expose these ports to the Internet. Event credentials allow event access independently of video clients.
 - RTSP is passed through over TCP. Configure the consumer for interleaved RTP over RTSP/TCP. RTP/UDP forwarding, transcoding, image-based motion detection, PTZ, additional ONVIF audio support, and full Profile T are not implemented.
 - Events supports PullPoint subscriptions, renewal, unsubscribe, and synchronization. Push `Subscribe`, historical event search, and arbitrary filters are not implemented. Only `RuleEngine/CellMotionDetector/Motion` is advertised.
