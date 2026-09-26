@@ -15,12 +15,11 @@ onvif:
       quality: 4
     # Optional: add lowQuality if a substream is available.
     # Without a snapshot path, the included fallback image is used.
-    # For live images at the cached /snapshot.png URL, configure a snapshot
+    # For live images at the /snapshot.png URL, configure a snapshot
     # path and both snapshot ports, plus snapshotAuth for protected sources:
     # snapshotAuth:
     #   usernameEnv: SNAPSHOT_USERNAME
     #   passwordEnv: SNAPSHOT_PASSWORD
-    # See docs/snapshot-compatibility.md for the complete setup.
     target:
       hostname: 192.168.1.200
       ports: { rtsp: 554 }
