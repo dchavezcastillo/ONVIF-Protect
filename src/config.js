@@ -95,7 +95,7 @@ function validateMotion(motion, sources, name) {
   )
     fail("invalid eventTypes");
 }
-function validateCamera(camera, sources, identities) {
+function validateCamera(camera, sources, identities, checkSecrets) {
   if (
     !isRecord(camera) ||
     typeof camera.name !== "string" ||
@@ -129,6 +129,17 @@ function validateCamera(camera, sources, identities) {
     port(camera.ports.snapshot, "snapshot");
     port(camera.target.ports.snapshot, "target.snapshot");
   }
+  if (camera.snapshotAuth !== undefined) {
+    if (!isRecord(camera.snapshotAuth) ||
+        !(camera.highQuality.snapshot || camera.lowQuality?.snapshot))
+      fail(`invalid snapshotAuth for ${camera.name}: configure a snapshot path`);
+    if (checkSecrets) {
+      for (const [field, value] of Object.entries(credentialsFor(camera.snapshotAuth))) {
+        if (typeof value !== "string" || !value || /[\r\n]/.test(value))
+          fail(`invalid snapshotAuth ${field} for ${camera.name}`);
+      }
+    }
+  }
   if (camera.motion) validateMotion(camera.motion, sources, camera.name);
 }
 function validateConfig(config, { checkSecrets = true } = {}) {
@@ -137,7 +148,7 @@ function validateConfig(config, { checkSecrets = true } = {}) {
   const sources = validateSources(config.eventSources, checkSecrets);
   const identities = { macs: new Set(), uuids: new Set() };
   for (const camera of config.onvif)
-    validateCamera(camera, sources, identities);
+    validateCamera(camera, sources, identities, checkSecrets);
   return config;
 }
 function readConfig(filename, options) {

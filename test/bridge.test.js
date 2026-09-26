@@ -265,12 +265,21 @@ test("simulated Digest DVR forwards motion end-to-end and reconnects after EOF",
   assert.ok(connects >= 2);
 });
 
-test("device/media SOAP operations work with offline WSDL and cached snapshot", async (t) => {
+test("device/media SOAP operations work with offline WSDL and live legacy snapshot", async (t) => {
   const config = readConfig(path.join(__dirname, "../config.hikvision.example.yaml"), {
     checkSecrets: false,
   }).onvif[0];
   config.hostname = "127.0.0.1";
   config.ports.server = 0;
+  const snapshot = fs.readFileSync(path.join(__dirname, "../resources/snapshot.png"));
+  const source = http.createServer((req, res) => {
+    assert.equal(req.url, config.highQuality.snapshot);
+    res.writeHead(200, { "Content-Type": "image/png" });
+    res.end(snapshot);
+  });
+  config.target.hostname = "127.0.0.1";
+  config.target.ports.snapshot = await listen(source);
+  t.after(() => new Promise((resolve) => source.close(resolve)));
   const camera = createServer(config, logger);
   t.after(() => camera.close());
   await camera.startServer();
