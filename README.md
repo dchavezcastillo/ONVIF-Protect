@@ -124,30 +124,11 @@ Use H.264 for the first video test and set HQ/LQ to the actual stream parameters
 
 Channel IDs are never inferred from RTSP paths. Without `motion`, the camera provides video without advertising Events. Events from other sources, channels, or event types are ignored. `active` starts motion; `inactive` ends it. Repeated activations refresh the reset timer without duplicating state changes. After 30 seconds without another activation, the bridge sends `false` to prevent motion from remaining active indefinitely when an end event is lost. Adjust this interval for your DVR; `0` disables automatic reset and requires reliable `inactive` events.
 
-## Snapshots and missing thumbnails
+## Update an existing Raspberry Pi installation
 
-Snapshots need their own source path and port; a working RTSP stream or motion event does not prove that image retrieval works. Follow [the snapshot setup and recovery guide](docs/snapshot-compatibility.md), including installing the corrected code on the Pi.
-
-| Setting | Example and purpose |
-| --- | --- |
-| Camera `ports.snapshot` | `8580`: virtual TCP snapshot proxy |
-| `target.ports.snapshot` | `80`: source HTTP image service |
-| `highQuality.snapshot` | Verified source image path for this channel |
-| Camera `snapshotAuth` | Explicit source credentials for the legacy `/snapshot.png` route |
-
-The source account can be the same as the event account, but its environment-variable names must also be set in `snapshotAuth`. Test the legacy route after validating and restarting the service:
-
-```sh
-curl --fail --show-error --max-time 15 \
-  -o /tmp/camera1-snapshot.jpg http://192.168.1.201:8081/snapshot.png
-file /tmp/camera1-snapshot.jpg
-```
-
-Expect a real, current image of this camera. The legacy route uses the configured credentials without asking the client for a password; restrict the ONVIF port to trusted clients. Verify a **new, completed motion event** in Protect. Old events with missing thumbnails may stay unchanged.
+Follow [Update the code on the Raspberry Pi](docs/update-raspberry-pi.md). Updates use the `main` branch. The procedure updates the project in `/opt/onvif-protect`, validates `/etc/onvif-protect.yaml`, and restarts the bridge without removing adopted cameras or replacing active configuration/network files.
 
 ## Adoption and acceptance testing in Protect
-
-If events play video but thumbnails return 404, Protect may still have the original `/snapshot.png` URL stored. The bridge now serves the configured source image at that legacy URL, using explicit `snapshotAuth` credentials when required. Follow [Restore thumbnails without removing adopted cameras](docs/snapshot-compatibility.md) to configure and test it without changing camera identities or removing their history.
 
 Enable **Discover Third-Party Cameras**, adopt each virtual camera, and provide the DVR's video credentials. The event account can be different. If multicast discovery does not find the camera, use advanced adoption with its virtual IP and ONVIF port.
 
@@ -184,7 +165,7 @@ watch -n 1 'curl --show-error --max-time 2 http://VIRTUAL_IP:8081/healthz'
 
 If movement reaches the bridge but Protect has no subscription, especially after adding motion to an already adopted camera, verify the saved configuration and restart the Pi. Confirm `onvif-network.service` and `onvif-protect.service` are active after reboot. If needed, restart the Protect application through the console's application management, then check subscriptions and trigger a new motion episode. Restarting Protect temporarily interrupts viewing and recording for its cameras.
 
-Restarting the system and Protect restored motion delivery in a real deployment. This is an observed recovery step, not a guaranteed fix or proof of a specific caching issue. Preserve the camera UUID and MAC. Before removing/re-adopting a camera, collect the Protect version, `/healthz` response, and debug logs; removal can affect its association with existing recordings.
+If subscriptions remain absent after restarting, continue troubleshooting with the health response and debug logs. Preserve the camera UUID and MAC. Before removing/re-adopting a camera, collect the Protect version, `/healthz` response, and debug logs; removal can affect its association with existing recordings.
 
 See the [full motion verification, restart, and debug procedure](docs/raspberry-pi-setup.md#11-verify-motion-through-all-three-stages) for commands and expected results.
 
@@ -299,7 +280,7 @@ When migrating from systemd, stop `onvif-protect.service` first to release its p
 ## Compatibility and limitations
 
 - `sudo /usr/bin/node main.js /etc/onvif-protect.yaml`, `--create-config`, `--version`, `--debug`, and their CLI aliases are supported. The generator retrieves ONVIF profiles and produces YAML; assign MAC addresses and add optional `eventSources`/`motion` after verifying channel IDs. Save generated UUIDs to keep device identities stable.
-- The TCP proxy preserves the DVR's RTSP/snapshot authentication. Virtual ONVIF endpoints and `/healthz` do not authenticate clients. The legacy `/snapshot.png` route also has no client authentication and fetches real images using explicit `snapshotAuth` credentials when configured. Use a trusted LAN/VLAN and do not expose these ports to the Internet. Event credentials allow event access independently of video clients.
+- The TCP proxy preserves the DVR's RTSP/snapshot authentication. Virtual ONVIF endpoints and `/healthz` do not authenticate clients. The `/snapshot.png` route also has no client authentication and fetches real images using explicit `snapshotAuth` credentials when configured. Use a trusted LAN/VLAN and do not expose these ports to the Internet. Event credentials allow event access independently of video clients.
 - RTSP is passed through over TCP. Configure the consumer for interleaved RTP over RTSP/TCP. RTP/UDP forwarding, transcoding, image-based motion detection, PTZ, additional ONVIF audio support, and full Profile T are not implemented.
 - Events supports PullPoint subscriptions, renewal, unsubscribe, and synchronization. Push `Subscribe`, historical event search, and arbitrary filters are not implemented. Only `RuleEngine/CellMotionDetector/Motion` is advertised.
 - Each camera supports up to 32 subscriptions and 256 queued changes per subscription. Full queues discard the oldest changes. Events are not persisted. New subscriptions receive the current state.
@@ -314,7 +295,7 @@ When migrating from systemd, stop `onvif-protect.service` first to release its p
 - `src/config.js` validates source, camera, profile, and motion settings. `src/config-builder.js` discovers profiles and generates configuration.
 - `src/onvif/` contains Device and Media operations, discovery, HTTP routing, event XML, and subscription state used to assemble virtual cameras.
 - `src/event-stream/` handles event stream connections and XML framing. `src/event-sources.js` selects adapters, and `src/motion-router.js` routes events to configured cameras.
-- `src/transport/` contains shared XML, Digest authentication, and server lifecycle utilities. `src/tcp-proxy.js` provides stream passthrough; `src/snapshot.js` fetches real source images for the legacy snapshot route.
+- `src/transport/` contains shared XML, Digest authentication, and server lifecycle utilities. `src/tcp-proxy.js` provides stream passthrough; `src/snapshot.js` fetches real source images for the `/snapshot.png` route.
 
 Each application owns its listeners, event sources, and timers. Shutdown can be called repeatedly. A failed startup closes acquired resources, and the application does not mutate the configuration supplied by its caller. Subscription state is separate from SOAP serialization so lifecycle behavior can be tested independently.
 

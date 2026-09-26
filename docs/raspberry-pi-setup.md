@@ -177,7 +177,7 @@ If a firewall or VLAN separates the devices, allow Protect to reach UDP 3702 for
 
 If some cameras are missing or their IP associations change in Protect, use [network troubleshooting](network-troubleshooting.md). It includes checks for every configured IP, ARP inspection from the correct subnet, optional persistent ARP settings, and reboot verification. Keep the existing camera identities. A successful local HTTP check alone does not verify what Protect sees on the network.
 
-When adding snapshots, also allow TCP 8580 to the virtual IP and HTTP access from the Pi to the source snapshot port (80 in the examples). The legacy image URL uses the existing ONVIF port 8081.
+When adding snapshots, also allow TCP 8580 to the virtual IP and HTTP access from the Pi to the source snapshot port (80 in the examples). The `/snapshot.png` image URL uses the existing ONVIF port 8081.
 
 ## 5. Validate and test manually
 
@@ -398,7 +398,7 @@ Finally, verify a motion event on **this virtual camera's Protect timeline** at 
 
 If `motion: true` is visible but `subscriptions: 0` persists, the source-to-bridge path works. Investigate Protect's event subscription next.
 
-A camera adopted before motion was configured may need its capabilities to be rediscovered. In a real deployment, restarting the system and Protect resolved this condition; this is an observed recovery step, not a guaranteed fix or proof of the underlying cause.
+After enabling motion, check that Protect subscribes to events. If it does not, use the following restart and verification procedure, then collect debug logs if the issue persists.
 
 1. Ensure the saved service configuration includes motion and starts successfully.
 2. Restart the Pi and reconnect after it boots:
@@ -423,8 +423,6 @@ Do not regenerate the UUID or MAC as a troubleshooting step. Do not immediately 
 If subscriptions exist but no timeline event appears, inspect event requests/errors and Protect settings. A subscription alone does not guarantee notification compatibility.
 
 ## 13. Capture debug logs
-
-For playable events with missing thumbnails, see [Restore thumbnails without removing adopted cameras](snapshot-compatibility.md). It covers the legacy snapshot URL, source credentials, and validation of a new event.
 
 A manual debug process temporarily replaces the service and interrupts video during the switch. Never run both simultaneously:
 
@@ -568,18 +566,9 @@ Trigger movement and check `source.connected: true`, `motion: true`, an active s
 
 If Protect lists the same virtual IP twice, compare identities, active processes, and the MAC displayed for each entry before changing anything. A source recorder listed at its own IP is a separate discovery entry. Preserve the working camera's identity.
 
-## 15. Configure snapshots and verify thumbnails
+## 15. Update the installed code
 
-Use [the complete snapshot procedure](snapshot-compatibility.md) after video works. It covers both new installations and existing cameras whose cached image URL is `/snapshot.png`.
-
-1. Install the corrected project code on the Pi; editing YAML alone cannot add the new handler.
-2. Verify the source image with curl using the correct account and channel path.
-3. Edit `/etc/onvif-protect.yaml` with nano: add `ports.snapshot`, `target.ports.snapshot`, `highQuality.snapshot`, and camera-level `snapshotAuth`. Preserve the existing UUID, MAC, IP, video, and motion settings.
-4. Add the referenced credentials to `/etc/onvif-protect.env`, validate, and restart the bridge as shown in the snapshot procedure.
-5. Download `http://VIRTUAL_IP:8081/snapshot.png` without client credentials and confirm a current image of the correct camera. Repeat for each camera.
-6. Trigger a new motion episode, let it finish, and verify the thumbnail in Protect. Existing events without saved thumbnails may not regenerate.
-
-Do not remove or re-adopt existing cameras for this correction. The direct snapshot proxy on port 8580 and the compatibility route on port 8081 use different authentication paths; test the exact URL Protect has stored.
+Follow [Update the code on the Raspberry Pi](update-raspberry-pi.md) for the exact branch, validation, and restart commands. Keep using `/etc/onvif-protect.yaml` and `/etc/onvif-protect.env`. Updating the project does not require regenerating camera identities, reinstalling network interfaces, or removing cameras from Protect.
 
 ## 16. Service commands
 

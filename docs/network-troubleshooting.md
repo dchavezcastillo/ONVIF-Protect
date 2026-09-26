@@ -125,7 +125,7 @@ If all HTTP checks and MAC mappings are correct but cameras remain undiscovered:
 - Confirm each camera has a unique UUID and MAC in `/etc/onvif-protect.yaml`.
 - Check UDP 3702/multicast reachability between Protect and the virtual cameras. Routed HTTP access does not prove multicast discovery works.
 - For cameras not yet adopted, try advanced adoption using each virtual IP and ONVIF port 8081. Preserve cameras already adopted.
-- Allow Protect to reach TCP 8081 (ONVIF and legacy snapshots), 8554 (RTSP), and 8580 if configured (direct snapshot proxy). The Pi also needs access to the source's configured ports.
+- Allow Protect to reach TCP 8081 (ONVIF and snapshots), 8554 (RTSP), and 8580 if configured (direct snapshot proxy). The Pi also needs access to the source's configured ports.
 
 Collect bridge logs and, if tcpdump is installed, discovery traffic while Protect searches:
 
@@ -153,4 +153,4 @@ sysctl net.ipv4.conf.all.arp_ignore net.ipv4.conf.all.arp_announce
 
 Repeat the per-camera HTTP checks and remote MAC checks. Confirm that Protect retains each existing camera's identity, video, and motion events. If network mappings are stable but Protect still shows stale associations, a Protect application restart can be tested; it interrupts recording and is not guaranteed to resolve discovery.
 
-For playable video with missing images, continue with [snapshot configuration and verification](snapshot-compatibility.md). That is a separate check from ARP and discovery.
+For routine application updates, follow [Update the code on the Raspberry Pi](update-raspberry-pi.md). Updating application code is separate from changing ARP settings or camera identities.
