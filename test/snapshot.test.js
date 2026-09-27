@@ -169,3 +169,64 @@ test("camera snapshots stay isolated and use each configured source path", async
   assert.deepEqual(Buffer.from(await responses[0].arrayBuffer()), png);
   assert.deepEqual(Buffer.from(await responses[1].arrayBuffer()), jpeg);
 });
+
+test("independent snapshot host routes both image endpoints without changing the video target", async (t) => {
+  const { run } = require("../src/application");
+  const net = require("node:net");
+  const seen = [];
+  const upstream = http.createServer((req, res) => {
+    seen.push({ address: req.socket.localAddress, path: req.url });
+    res.writeHead(200, { "Content-Type": "image/png" });
+    res.end(png);
+  });
+  upstream.listen(0, "127.0.0.1");
+  await once(upstream, "listening");
+  t.after(() => closeServer(upstream));
+  const reservations = [];
+  for (let i = 0; i < 3; i++) {
+    const server = net.createServer();
+    server.listen(0, "127.0.0.1");
+    await once(server, "listening");
+    reservations.push(server);
+    t.after(() => closeServer(server));
+  }
+  const ports = reservations.map(server => server.address().port);
+  await Promise.all(reservations.map(closeServer));
+  const config = readConfig(require.resolve("../config.example.yaml"));
+  const camera = config.onvif[0];
+  camera.hostname = "127.0.0.1";
+  camera.ports = { server: ports[0], rtsp: ports[1], snapshot: ports[2] };
+  camera.highQuality.snapshot = "/camera/image";
+  camera.target = {
+    hostname: "recorder.invalid", snapshotHostname: "127.0.0.1",
+    ports: { rtsp: upstream.address().port, snapshot: upstream.address().port }
+  };
+  const original = structuredClone(config);
+  const app = await run(config, { discovery: false, logger });
+  t.after(() => app.close());
+  for (const [port, path] of [[ports[0], "/snapshot.png"], [ports[2], "/camera/image"]]) {
+    const response = await fetch(`http://127.0.0.1:${port}${path}`);
+    assert.equal(response.status, 200);
+    assert.deepEqual(Buffer.from(await response.arrayBuffer()), png);
+  }
+  assert.deepEqual(seen, [
+    { address: "127.0.0.1", path: "/camera/image" },
+    { address: "127.0.0.1", path: "/camera/image" }
+  ]);
+  assert.deepEqual(config, original);
+});
+
+test("snapshot host override requires a host and configured image path", () => {
+  const config = readConfig(require.resolve("../config.example.yaml"));
+  const camera = config.onvif[0];
+  camera.target.snapshotHostname = "camera.local";
+  assert.throws(() => validateConfig(config), /snapshotHostname/);
+  camera.highQuality.snapshot = "/picture";
+  camera.ports.snapshot = 8580;
+  camera.target.ports.snapshot = 80;
+  assert.doesNotThrow(() => validateConfig(config));
+  for (const host of ["", null, 104, "http://camera.local", "user:pass@camera.local", "camera.local/path"]) {
+    camera.target.snapshotHostname = host;
+    assert.throws(() => validateConfig(config), /snapshotHostname/);
+  }
+});
