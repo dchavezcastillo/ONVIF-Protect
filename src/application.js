@@ -66,7 +66,9 @@ async function run(
         const proxy = createProxy(
           camera.getHostname(),
           entry.ports[type],
-          entry.target.hostname,
+          type === "snapshot"
+            ? (entry.target.snapshotHostname ?? entry.target.hostname)
+            : entry.target.hostname,
           entry.target.ports[type],
         );
         proxies.push(proxy);

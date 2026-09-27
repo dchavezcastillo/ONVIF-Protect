@@ -22,4 +22,6 @@ onvif:
     #   passwordEnv: SNAPSHOT_PASSWORD
     target:
       hostname: 192.168.1.200
+      # Optional independent image source; RTSP continues using hostname.
+      # snapshotHostname: 192.168.1.104
       ports: { rtsp: 554 }

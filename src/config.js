@@ -129,6 +129,12 @@ function validateCamera(camera, sources, identities, checkSecrets) {
     port(camera.ports.snapshot, "snapshot");
     port(camera.target.ports.snapshot, "target.snapshot");
   }
+  if (camera.target.snapshotHostname !== undefined) {
+    if (typeof camera.target.snapshotHostname !== "string" ||
+        !/^[a-z\d._-]+$/i.test(camera.target.snapshotHostname) ||
+        !(camera.highQuality.snapshot || camera.lowQuality?.snapshot))
+      fail(`invalid snapshotHostname for ${camera.name}: configure a hostname and snapshot path`);
+  }
   if (camera.snapshotAuth !== undefined) {
     if (!isRecord(camera.snapshotAuth) ||
         !(camera.highQuality.snapshot || camera.lowQuality?.snapshot))

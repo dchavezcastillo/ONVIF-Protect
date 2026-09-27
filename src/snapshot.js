@@ -59,7 +59,7 @@ class Snapshot {
       if (finished) return;
       try {
         upstream = http.get({
-          hostname: this.config.target.hostname,
+          hostname: this.config.target.snapshotHostname ?? this.config.target.hostname,
           port: this.config.target.ports.snapshot,
           path: this.path,
           agent: false,

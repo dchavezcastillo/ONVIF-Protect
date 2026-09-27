@@ -124,6 +124,8 @@ Use H.264 for the first video test and set HQ/LQ to the actual stream parameters
 
 Channel IDs are never inferred from RTSP paths. Without `motion`, the camera provides video without advertising Events. Events from other sources, channels, or event types are ignored. `active` starts motion; `inactive` ends it. Repeated activations refresh the reset timer without duplicating state changes. After 30 seconds without another activation, the bridge sends `false` to prevent motion from remaining active indefinitely when an end event is lost. Adjust this interval for your DVR; `0` disables automatic reset and requires reliable `inactive` events.
 
+For a recorder-backed video stream with images supplied directly by an IP camera, configure `target.snapshotHostname`. See [separate snapshot hosts](docs/raspberry-pi-setup.md#17-use-a-separate-host-for-snapshots). RTSP and motion retain their own configured sources.
+
 ## Update an existing Raspberry Pi installation
 
 Follow [Update the code on the Raspberry Pi](docs/update-raspberry-pi.md). Updates use the `main` branch. The procedure updates the project in `/opt/onvif-protect`, validates `/etc/onvif-protect.yaml`, and restarts the bridge without removing adopted cameras or replacing active configuration/network files.

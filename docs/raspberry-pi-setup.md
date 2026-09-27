@@ -590,3 +590,39 @@ sudo journalctl -u onvif-protect.service -n 60 --no-pager
 ```
 
 Restart networking only after changing the network script, following section 14. The network service is a oneshot unit: stopping it does not delete virtual interfaces. No `daemon-reload` is required for YAML, environment-file, or network-script edits; it is required after editing a systemd unit.
+
+## 17. Use a separate host for snapshots
+
+When the recorder supplies video but an IP camera supplies its own JPEG/PNG endpoint, set `target.snapshotHostname` to the camera's address. RTSP still uses `target.hostname`, and motion still uses the configured event source. Without `snapshotHostname`, images use `target.hostname` too.
+
+Edit the existing camera entry in `/etc/onvif-protect.yaml`. Merge these fields into its existing blocks, preserving identity and motion settings:
+
+```yaml
+    ports:
+      server: 8081
+      rtsp: 8554
+      snapshot: 8580
+    highQuality:
+      rtsp: "/recorder/video/path"
+      snapshot: "/camera/image/path"
+      width: 1920
+      height: 1080
+      framerate: 15
+      bitrate: 2048
+      quality: 4
+    target:
+      hostname: 192.168.1.25
+      snapshotHostname: 192.168.1.104
+      ports:
+        rtsp: 554
+        snapshot: 80
+    snapshotAuth:
+      usernameEnv: SNAPSHOT_USERNAME
+      passwordEnv: SNAPSHOT_PASSWORD
+```
+
+Use the actual source paths and video parameters. Put the camera's image credentials in `/etc/onvif-protect.env` under the referenced names; these may differ from the recorder's credentials. Validate with the environment file and restart the bridge using the commands in section 10.
+
+Both `/snapshot.png` on the ONVIF port and the TCP snapshot proxy use the separate image host. The TCP proxy still requires the client to authenticate with the camera; `snapshotAuth` supplies credentials only for `/snapshot.png`. The image host is an HTTP hostname/IP, without a URL scheme or path.
+
+Test `/snapshot.png` on the virtual IP, confirm a current image of the correct camera, and then check a new completed event in Protect. The camera's virtual IP, MAC, UUID, and adoption do not need to change.
